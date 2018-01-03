@@ -16,18 +16,24 @@ const openInDefaultButton = document.querySelector('#open-in-default');
 
 let filePath = null
 let originalContent = ''
+// let isEdited = false
 
-const updateUserInterface = (isEdited) => {
+// exports.isEdited = () => {
+//   return isEdited
+// }
+
+const updateUserInterface = (_isEdited) => {
   let title = 'Fire Sale';
  
   if (filePath) { title = `${path.basename(filePath)} - ${title}`; }
-  if (isEdited) { title = `${title} (Edited)`; }
+  if (_isEdited) { title = `${title} (Edited)`; }
  
   currentWindow.setTitle(title);
-  currentWindow.setDocumentEdited(isEdited);
+  currentWindow.setDocumentEdited(_isEdited);
 
-  saveMarkdownButton.disabled = !isEdited
-  revertButton.disabled = !isEdited
+  saveMarkdownButton.disabled = !_isEdited
+  revertButton.disabled = !_isEdited
+  // isEdited = _isEdited
 };
 
 const renderMarkdownToHtml = (markdown) => {
@@ -44,16 +50,52 @@ openFileButton.addEventListener('click', () => {
   mainProcess.getFileFromUser(currentWindow);
 });
 
-ipcRenderer.on('file-opened', (event, file, content) => {
-  console.log(file)
+const renderFile = (file, content) => {
   filePath = file;
   originalContent = content;
  
   markdownView.value = content;
   renderMarkdownToHtml(content);
-
+ 
   updateUserInterface(false);
+};
+
+ipcRenderer.on('file-opened', (event, file, content) => {
+  if (currentWindow.isDocumentEdited()) {
+    const result = remote.dialog.showMessageBox(currentWindow, {
+      type: 'warning',
+      title: 'Overwrite Current Unsaved Changes?',
+      message: 'Opening a new file in this window will overwrite your unsaved changes. Open this file anyway?',
+      buttons: [
+        'Yes',
+        'Cancel',
+      ],
+      defaultId: 0,
+      cancelId: 1,
+    });
+ 
+    if (result === 1) { return; }
+  }
+ 
+  renderFile(file, content);
 });
+
+ipcRenderer.on('file-changed', (event, file, content) => {
+  const result = remote.dialog.showMessageBox(currentWindow, {
+    type: 'warning',
+    title: 'Overwrite Current Unsaved Changes?',
+    message: 'Another application has changed this file. Load changes?',
+    buttons: [
+      'Yes',
+      'Cancel',
+    ],
+    defaultId: 0,
+    cancelId: 1
+  });
+ 
+  renderFile(file, content);
+});
+ 
 
 newFileButton.addEventListener('click', () => {
   mainProcess.createWindow();
@@ -97,7 +139,7 @@ markdownView.addEventListener('drop', (event) => {
   // } else {
     // alert('That file type is not supported');
   // }
- 
+  
   markdownView.classList.remove('drag-over');
   markdownView.classList.remove('drag-error');
 });

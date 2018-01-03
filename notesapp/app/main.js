@@ -1,4 +1,5 @@
 const { app, BrowserWindow, dialog } = require('electron');
+const { ipcMain } = require('electron')
 const fs = require('fs');
  
 const windows = new Set();
@@ -38,9 +39,9 @@ const createWindow = exports.createWindow = () => {
   });
  
   newWindow.on('close', (event) => {
+    // only work on mac
     if (newWindow.isDocumentEdited()) {
       event.preventDefault();
- 
       const result = dialog.showMessageBox(newWindow, {
         type: 'warning',
         title: 'Quit with Unsaved Changes?',
@@ -57,7 +58,7 @@ const createWindow = exports.createWindow = () => {
     }
   });
  
-  newWindow.on('closed', () => {
+  newWindow.on('closed', (event) => {
     windows.delete(newWindow);
     newWindow = null;
   });
@@ -117,12 +118,15 @@ const saveHtml = exports.saveHtml = (targetWindow, content) => {
   fs.writeFileSync(file, content);
 };
  
+// 监控文件的变化
 const startWatchingFile = (targetWindow, file) => {
   stopWatchingFile(targetWindow);
  
-  const watcher = fs.watchFile(file, () => {
+  const watcher = fs.watchFile(file, (event) => {
+    // if (event === 'change') {
     const content = fs.readFileSync(file);
     targetWindow.webContents.send('file-changed', file, content);
+    // }
   });
  
   openFiles.set(targetWindow, watcher);
@@ -130,7 +134,7 @@ const startWatchingFile = (targetWindow, file) => {
  
 const stopWatchingFile = (targetWindow) => {
   if (openFiles.has(targetWindow)) {
-    openFiles.get(targetWindow).close();
+    // openFiles.get(targetWindow).stop();
     openFiles.delete(targetWindow);
   }
 };
